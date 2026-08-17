@@ -1,0 +1,4 @@
+*.exe
+.ENV
+env
+.vscode
