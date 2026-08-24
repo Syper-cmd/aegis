@@ -1,4 +1,4 @@
-version: 2 # Обновлено до актуальной версии v2
+version: 1
 
 before:
   hooks:
