@@ -1,29 +1,28 @@
-version: 1
+version: 2 # Обновлено до актуальной версии v2
 
 before:
   hooks:
-   - go mod tidy
+    - go mod tidy
 
 builds:
   - env:
-    - CGO_ENABLED=0
-    main: ./src
+      - CGO_ENABLED=0
+    main: .            # Ищет main.go в корне (без /src)
     goos:
-     - darwin
-     - windows
-     - linux
-     - freebsd
+      - darwin
+      - windows
+      - linux
+      - freebsd
     goarch:
-      - 386
+      - "386"
       - amd64
       - arm64
     goarm:
-     - 6
-     - 7
+      - "6"
+      - "7"
 
 archives:
   - format: tar.gz
-    # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -31,7 +30,6 @@ archives:
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
       {{- if .Arm }}v{{ .Arm }}{{ end }}
-    # use zip for windows archives
     format_overrides:
       - goos: windows
         format: zip
