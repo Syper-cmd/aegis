@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"aegis/cmd"
 )
 
 func main() {
-	fmt.Printf("Hello World")
+	cmd.Execute()
 }
