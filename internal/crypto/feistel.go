@@ -100,17 +100,22 @@ func (c *FeistelCipher) Encrypt(data []byte) []byte {
 }
 
 // DecryptBlock розшифровує 1 блок (8 байт)
+// DecryptBlock розшифровує 1 блок (8 байт)
 func (c *FeistelCipher) DecryptBlock(src, dst []byte) {
-	R := binary.BigEndian.Uint32(src[:4])
-	L := binary.BigEndian.Uint32(src[4:8])
+	// Правильно зчитуємо половинки:
+	// src[:4] відповідає L для алгоритму розшифрування (колишнє R)
+	// src[4:8] відповідає R для алгоритму розшифрування (колишнє L)
+	L := binary.BigEndian.Uint32(src[:4])
+	R := binary.BigEndian.Uint32(src[4:8])
 
 	// Крутимо раундові ключі у ЗВОРОТНОМУ порядку!
 	for i := NumRounds - 1; i >= 0; i-- {
 		L, R = R, L^c.f(R, c.subkeys[i])
 	}
 
-	binary.BigEndian.PutUint32(dst[:4], L)
-	binary.BigEndian.PutUint32(dst[4:8], R)
+	// Фінальний запис відновлених оригінальних блоків
+	binary.BigEndian.PutUint32(dst[:4], R)
+	binary.BigEndian.PutUint32(dst[4:8], L)
 }
 
 // Decrypt розшифровує масив байтів та знімає PKCS7 padding
