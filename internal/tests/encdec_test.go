@@ -28,6 +28,6 @@ func TestEncDec(t *testing.T) {
 	}
 
 	if string(testText) != string(decText) {
-		t.Fatalf("ОШИБКА! СТРОКИ НЕ СОВПАЛИ! Ожидалось: %s, Получил:%s", testText, decText)
+		t.Fatalf("ОШИБКА! СТРОКИ НЕ СОВПАЛИ! Ожидалось: %s, Получил:%s", string(testText), string(decText))
 	}
 }
