@@ -3,6 +3,7 @@ package pe
 import (
 	"debug/pe"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -70,6 +71,14 @@ func (inj *Injector) GetSectionDebugInfo() ([]SectionData, error) {
 }
 
 func (inj *Injector) GetLargestCavern() (*SectionData, error) {
+	if inj.peFile == nil {
+		peFile, err := pe.Open(inj.filePath)
+		if err != nil {
+			return nil, fmt.Errorf("помилка повторного відкриття PE файлу: %w", err)
+		}
+		inj.peFile = peFile
+	}
+
 	sections, err := inj.GetSectionDebugInfo()
 	if err != nil {
 		return nil, fmt.Errorf("виникла помилка отримання секцій: %w", err)
@@ -95,6 +104,76 @@ func (inj *Injector) GetLargestCavern() (*SectionData, error) {
 	}
 
 	return largestSection, nil
+}
+
+// GetSmallerCavern шукає найменшу придатну каверну.
+// Приймає ignoreOffset, щоб уникнути вибору тієї ж каверни, що й для payload.
+// Якщо обмежень немає, передавай ignoreOffset = 0.
+func (inj *Injector) GetSmallerCavern(ignoreOffset uint32) (*SectionData, error) {
+
+	if inj.peFile == nil {
+		peFile, err := pe.Open(inj.filePath)
+		if err != nil {
+			return nil, fmt.Errorf("помилка повторного відкриття PE файлу: %w", err)
+		}
+		inj.peFile = peFile
+	}
+
+	sections, err := inj.GetSectionDebugInfo()
+	if err != nil {
+		return nil, fmt.Errorf("виникла помилка отримання секцій: %w", err)
+	}
+
+	if len(sections) == 0 {
+		return nil, fmt.Errorf("у PE файлі відсутні секції")
+	}
+
+	var smallestSection *SectionData
+
+	for i := range sections {
+		// Перевіряємо, що каверна дісна і не збігається з проігнорованою
+		if sections[i].CaveSize > 0 && sections[i].CaveOffset != ignoreOffset {
+			if smallestSection == nil || sections[i].CaveSize < smallestSection.CaveSize {
+				smallestSection = &sections[i]
+			}
+		}
+	}
+
+	if smallestSection == nil {
+		return nil, fmt.Errorf("підходящої окремої каверни не знайдено")
+	}
+
+	return smallestSection, nil
+}
+
+func (inj *Injector) ReadPayload(caveOffset uint32, size int) ([]byte, error) {
+	// 1. Якщо peFile відкритий, закриваємо його, щоб уникнути конфліктів блокування
+	if inj.peFile != nil {
+		_ = inj.peFile.Close()
+		inj.peFile = nil
+	}
+
+	// 2. Відкриваємо файл у режимі читання (os.O_RDONLY)
+	file, err := os.Open(inj.filePath)
+	if err != nil {
+		return nil, fmt.Errorf("помилка відкриття файлу для читання: %w", err)
+	}
+	defer file.Close()
+
+	// 3. Ставимо курсор на початок каверни
+	_, err = file.Seek(int64(caveOffset), io.SeekStart)
+	if err != nil {
+		return nil, fmt.Errorf("помилка позиціонування Seek: %w", err)
+	}
+
+	// 4. Створюємо буфер потрібного розміру та вичитуємо байти
+	payload := make([]byte, size)
+	_, err = io.ReadFull(file, payload)
+	if err != nil {
+		return nil, fmt.Errorf("помилка вичитання байтів: %w", err)
+	}
+
+	return payload, nil
 }
 
 func (inj *Injector) WritePayload(caveOffset uint32, payload []byte) error {
