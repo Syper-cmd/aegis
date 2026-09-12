@@ -1,6 +1,10 @@
 package cmd
 
 import (
+	"aegis/internal/compress"
+	"aegis/internal/crypto"
+	"aegis/internal/pe"
+	"encoding/binary"
 	"fmt"
 	"os"
 
@@ -9,7 +13,6 @@ import (
 
 var (
 	inFile       string
-	outFile      string
 	keyFile      string
 	silent       bool
 	textToEncode string
@@ -17,22 +20,75 @@ var (
 
 var encodeCmd = &cobra.Command{
 	Use:   "encode",
-	Short: "Шифрує данні в PE файл.",
+	Short: "Шифрує дані в PE файл.",
 	Long:  `Шифрує текст за допомогою алгоритму на основі мережі Фейстеля, а потім записує в каверни в PE файлі.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
-		// 1. Исправлено: убрали, теперь считывается весь файл ключа целиком
+		// 1. Зчитування ключа
 		keyBytes, err := os.ReadFile(keyFile)
 		if err != nil {
-			return fmt.Errorf("Помилка зчитання файлу ключа %s. Помилка: %w", keyFile, err)
+			return fmt.Errorf("помилка зчитання файлу ключа %s: %w", keyFile, err)
 		}
 
-		// 2. Исправлено: корректно возвращаем форматированную строку ошибки
 		if len(keyBytes) != 32 {
-			return fmt.Errorf("Помилка зчитування файлу ключа! Неправильна довжина (%d байт). Можливо, ключ було згенеровано іншою программою, або він пошкодженний.", len(keyBytes))
+			return fmt.Errorf("помилка ключа! Неправильна довжина (%d байт, очікується 32)", len(keyBytes))
 		}
 
-		// TODO:  Do a encode logic
+		// 2. Стиснення даних
+		compressedTextToEncode, err := compress.CompressZlib([]byte(textToEncode))
+		if err != nil {
+			return fmt.Errorf("помилка стискання тексту: %w", err)
+		}
+
+		// 3. Ініціалізація шифра та шифрування
+		feistelSifrConst, err := crypto.NewFeistelCipher(keyBytes)
+		if err != nil {
+			return fmt.Errorf("помилка при створенні структури шифра: %w", err)
+		}
+
+		encryptedPayload := feistelSifrConst.Encrypt(compressedTextToEncode)
+
+		// 4. Ініціалізація інжектора PE
+		encodeInjector, err := pe.New(inFile)
+		if err != nil {
+			return fmt.Errorf("помилка при відкритті PE файлу: %w", err)
+		}
+		defer encodeInjector.Close()
+
+		// 5. Пошук найбільшої каверни під payload
+		largestCavern, err := encodeInjector.GetLargestCavern()
+		if err != nil {
+			return fmt.Errorf("помилка при отриманні найбільшої каверни: %w", err)
+		}
+
+		if len(encryptedPayload) > largestCavern.CaveSize {
+			return fmt.Errorf("payload завеликий (%d байт) для найбільшої каверни (%d байт)", len(encryptedPayload), largestCavern.CaveSize)
+		}
+
+		// 6. Пошук найменшої каверни під розмір (ігноруємо найбільшу)
+		smallestCavern, err := encodeInjector.GetSmallerCavern(largestCavern.CaveOffset)
+		if err != nil {
+			return fmt.Errorf("помилка при отриманні каверни під метадані: %w", err)
+		}
+
+		// 7. Упаковка довжини у 4 байти
+		sizeBuf := make([]byte, 4)
+		binary.BigEndian.PutUint32(sizeBuf, uint32(len(encryptedPayload)))
+
+		// 8. Запис метаданих та payload у відповідні CaveOffset
+		if err := encodeInjector.WritePayload(smallestCavern.CaveOffset, sizeBuf); err != nil {
+			return fmt.Errorf("помилка запису розміру: %w", err)
+		}
+
+		if err := encodeInjector.WritePayload(largestCavern.CaveOffset, encryptedPayload); err != nil {
+			return fmt.Errorf("помилка запису payload: %w", err)
+		}
+
+		if !silent {
+			fmt.Println("[+] Все пройшло успішно!")
+			fmt.Printf("    - Payload (%d байт) -> %s (CaveOffset: 0x%X)\n", len(encryptedPayload), largestCavern.Name, largestCavern.CaveOffset)
+			fmt.Printf("    - Метадані (4 байти) -> %s (CaveOffset: 0x%X)\n", smallestCavern.Name, smallestCavern.CaveOffset)
+		}
 
 		return nil
 	},
@@ -44,47 +100,33 @@ func init() {
 		"in",
 		"i",
 		"",
-		`Файл, в якому будуть шукати каверни, та використовувати як основу. Сам файл не змінюється.
-		Точно підтримуються: .exe
-		На перевірці: .dll`,
-	)
-	encodeCmd.Flags().StringVarP(
-		&outFile,
-		"out",
-		"o",
-		"",
-		`Файл, який буде зберігатися на компьютері.
-		Це файл, в якому буде вже записанний та зашифрованний текст.
-		Для основи використовуеться файл з -in.`,
+		`Файл, в якому будуть шукати каверни, та використовувати як основу. Зміни записуються в файл.
+Точно підтримуються: .exe
+На перевірці: .dll`,
 	)
 	encodeCmd.Flags().StringVarP(
 		&textToEncode,
 		"text",
 		"t",
 		"",
-		"Текст для шифрування та скриття. Цей текст пройде етап стиснення та шифрування, а після буде записанний в каверни.",
+		"Текст для шифрування та скриття.",
 	)
-
 	encodeCmd.Flags().StringVarP(
 		&keyFile,
 		"key",
 		"k",
 		"",
-		`Ключ, який використовується для шифрування та розшифрування файлів. Має бути сгенерований командою keygen.
-		Тип ключів, які підтримує программа: .key, сгенеровані командою keygen`,
+		"Ключ, який використовується для шифрування та розшифрування файлів (.key).",
 	)
-
 	encodeCmd.Flags().BoolVarP(
 		&silent,
 		"silent",
 		"s",
 		false,
-		`Тихий режим - режим, що дозволяє не змінювати розмір файлу.
-		Якщо каверни в файлі будуть меньші, за текст, программа не буде розширювати файл, а видасть попередження.`,
+		"Тихий режим — приховує вивід деталей у консоль.",
 	)
 
 	_ = encodeCmd.MarkFlagRequired("in")
-	_ = encodeCmd.MarkFlagRequired("out")
 	_ = encodeCmd.MarkFlagRequired("text")
 	_ = encodeCmd.MarkFlagRequired("key")
 
