@@ -104,11 +104,9 @@ var encodeCmd = &cobra.Command{
 			return fmt.Errorf("помилка запису payload: %w", err)
 		}
 
-		if !silent {
-			fmt.Println("[+] Все пройшло успішно!")
-			fmt.Printf("    - Payload (%d байт) -> %s (CaveOffset: 0x%X)\n", payloadLen, largestCavern.Name, largestCavern.CaveOffset)
-			fmt.Printf("    - Метадані (4 байти) -> %s (CaveOffset: 0x%X)\n", smallestCavern.Name, smallestCavern.CaveOffset)
-		}
+		fmt.Println("[+] Все пройшло успішно!")
+		fmt.Printf("    - Payload (%d байт) -> %s (CaveOffset: 0x%X)\n", payloadLen, largestCavern.Name, largestCavern.CaveOffset)
+		fmt.Printf("    - Метадані (4 байти) -> %s (CaveOffset: 0x%X)\n", smallestCavern.Name, smallestCavern.CaveOffset)
 
 		return nil
 	},
