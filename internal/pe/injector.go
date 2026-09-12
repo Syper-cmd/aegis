@@ -204,3 +204,57 @@ func (inj *Injector) WritePayload(caveOffset uint32, payload []byte) error {
 
 	return file.Sync()
 }
+
+// ExpandSectionRawSize розширює фізичний розмір секції на потрібну кількість байтів
+func (inj *Injector) ExpandSectionRawSize(secName string, neededSize int) error {
+	if inj.peFile != nil {
+		_ = inj.peFile.Close()
+		inj.peFile = nil
+	}
+
+	// 1. Відкриваємо файл у режимі читання/запису
+	file, err := os.OpenFile(inj.filePath, os.O_RDWR, 0644)
+	if err != nil {
+		return fmt.Errorf("помилка відкриття файлу для розширення: %w", err)
+	}
+	defer file.Close()
+
+	// 2. Зчитуємо PE-заголовок за допомогою stdlib debug/pe
+	peFile, err := pe.Open(inj.filePath)
+	if err != nil {
+		return fmt.Errorf("помилка повторного читання заголовків: %w", err)
+	}
+	defer peFile.Close()
+
+	var targetSec *pe.Section
+	for _, sec := range peFile.Sections {
+		if sec.Name == secName {
+			targetSec = sec
+			break
+		}
+	}
+
+	if targetSec == nil {
+		return fmt.Errorf("секцію %s не знайдено", secName)
+	}
+
+	// 3. Розраховуємо нове значення SizeOfRawData з урахуванням FileAlignment
+	// Для стандартних PE-файлів FileAlignment зазвичай дорівнює 0x200 (512 байт)
+	var fileAlign uint32 = 0x200
+	newVirtualSize := targetSec.VirtualSize + uint32(neededSize)
+
+	// Вирівнюємо новий розмір
+	newSizeOfRawData := ((newVirtualSize + fileAlign - 1) / fileAlign) * fileAlign
+
+	// 4. Дописуємо нульові байти в кінець файлу для збільшення розміру
+	if _, err := file.Seek(0, io.SeekEnd); err != nil {
+		return fmt.Errorf("помилка позиціонування у кінець файлу: %w", err)
+	}
+
+	padding := make([]byte, newSizeOfRawData-targetSec.Size)
+	if _, err := file.Write(padding); err != nil {
+		return fmt.Errorf("помилка запису padding-байтів: %w", err)
+	}
+
+	return file.Sync()
+}

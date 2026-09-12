@@ -61,8 +61,28 @@ var encodeCmd = &cobra.Command{
 			return fmt.Errorf("помилка при отриманні найбільшої каверни: %w", err)
 		}
 
-		if len(encryptedPayload) > largestCavern.CaveSize {
-			return fmt.Errorf("payload завеликий (%d байт) для найбільшої каверни (%d байт)", len(encryptedPayload), largestCavern.CaveSize)
+		payloadLen := len(encryptedPayload)
+
+		// Перевірка розміру каверни та реалізація поведінки залежно від silent
+		if payloadLen > largestCavern.CaveSize {
+			if silent {
+				return fmt.Errorf("помилка: payload (%d байт) перевищує доступну каверну найбільшої секції (%d байт). У режимі --silent розширення заборонено", payloadLen, largestCavern.CaveSize)
+			}
+
+			// У звичайному режимі розширюємо секцію
+			neededBytes := payloadLen - largestCavern.CaveSize
+			fmt.Printf("[!] Payload (%d B) не вміщується в каверну (%d B). Розширюємо секцію %s...\n",
+				payloadLen, largestCavern.CaveSize, largestCavern.Name)
+
+			if err := encodeInjector.ExpandSectionRawSize(largestCavern.Name, neededBytes); err != nil {
+				return fmt.Errorf("помилка розширення секції: %w", err)
+			}
+
+			// Перечитаємо оновлені параметри каверни після розширення
+			largestCavern, err = encodeInjector.GetLargestCavern()
+			if err != nil {
+				return fmt.Errorf("помилка оновлення даних каверни: %w", err)
+			}
 		}
 
 		// 6. Пошук найменшої каверни під розмір (ігноруємо найбільшу)
@@ -73,7 +93,7 @@ var encodeCmd = &cobra.Command{
 
 		// 7. Упаковка довжини у 4 байти
 		sizeBuf := make([]byte, 4)
-		binary.BigEndian.PutUint32(sizeBuf, uint32(len(encryptedPayload)))
+		binary.BigEndian.PutUint32(sizeBuf, uint32(payloadLen))
 
 		// 8. Запис метаданих та payload у відповідні CaveOffset
 		if err := encodeInjector.WritePayload(smallestCavern.CaveOffset, sizeBuf); err != nil {
@@ -86,7 +106,7 @@ var encodeCmd = &cobra.Command{
 
 		if !silent {
 			fmt.Println("[+] Все пройшло успішно!")
-			fmt.Printf("    - Payload (%d байт) -> %s (CaveOffset: 0x%X)\n", len(encryptedPayload), largestCavern.Name, largestCavern.CaveOffset)
+			fmt.Printf("    - Payload (%d байт) -> %s (CaveOffset: 0x%X)\n", payloadLen, largestCavern.Name, largestCavern.CaveOffset)
 			fmt.Printf("    - Метадані (4 байти) -> %s (CaveOffset: 0x%X)\n", smallestCavern.Name, smallestCavern.CaveOffset)
 		}
 
@@ -123,7 +143,7 @@ func init() {
 		"silent",
 		"s",
 		false,
-		"Тихий режим — приховує вивід деталей у консоль.",
+		"Тихий режим — приховує вивід деталей у консоль та не розширює файли при нестачі каверни.",
 	)
 
 	_ = encodeCmd.MarkFlagRequired("in")
