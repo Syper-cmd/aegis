@@ -52,9 +52,9 @@ var decodeCmd = &cobra.Command{
 			return fmt.Errorf("помилка при пошуку каверни метаданих: %w", err)
 		}
 
-		// 5. Зчитуємо 4 байти розміру payload з найменшої каверни
-		sizeBuf := make([]byte, 4)
-		if err := decodeInjector.ReadPayload(smallestCavern.CaveOffset, sizeBuf); err != nil {
+		// 5. Зчитуємо 4 байти розміру payload з найменшої каверни (передаємо offset та розмір = 4)
+		sizeBuf, err := decodeInjector.ReadPayload(smallestCavern.CaveOffset, 4)
+		if err != nil {
 			return fmt.Errorf("помилка зчитання розміру payload: %w", err)
 		}
 
@@ -63,9 +63,9 @@ var decodeCmd = &cobra.Command{
 			return fmt.Errorf("помилка: зчитаний розмір payload дорівнює 0 (можливо, файл не містить даних)")
 		}
 
-		// 6. Зчитуємо зашифрований payload з найбільшої каверни
-		encryptedPayload := make([]byte, payloadSize)
-		if err := decodeInjector.ReadPayload(largestCavern.CaveOffset, encryptedPayload); err != nil {
+		// 6. Зчитуємо зашифрований payload з найбільшої каверни (передаємо offset та payloadSize)
+		encryptedPayload, err := decodeInjector.ReadPayload(largestCavern.CaveOffset, int(payloadSize))
+		if err != nil {
 			return fmt.Errorf("помилка зчитання зашифрованого payload: %w", err)
 		}
 
