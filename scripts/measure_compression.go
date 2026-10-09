@@ -1,11 +1,3 @@
-// measure_compression.go
-// Допоміжний скрипт для відтворення даних Додатку Г.2
-// (ефективність попереднього стиснення zlib + ентропія Шеннона).
-//
-// Використання:
-//
-//	go run scripts/measure_compression.go
-//	go run scripts/measure_compression.go payload.bin   # додатково перевірити свій файл
 package main
 
 import (
@@ -19,7 +11,6 @@ import (
 	"time"
 )
 
-// shannonEntropy обчислює ентропію Шеннона у бітах на байт.
 func shannonEntropy(data []byte) float64 {
 	if len(data) == 0 {
 		return 0.0
@@ -39,7 +30,6 @@ func shannonEntropy(data []byte) float64 {
 	return h
 }
 
-// zlibCompress стискає дані з максимальним рівнем стиснення.
 func zlibCompress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := zlib.NewWriterLevel(&buf, zlib.BestCompression)
@@ -86,7 +76,6 @@ func main() {
 		"Тип навантаження", "Вхід", "zlib", "K", "H_raw", "H_zlib", "Приріст")
 	fmt.Println("------------------------------------------------------------------------------------------------")
 
-	// 1. JSON / токени (висока надмірність)
 	jsonData := bytes.Repeat([]byte(
 		`{"token":"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.example","user":"admin","role":"root","exp":1735689600}`,
 	), 30)
@@ -95,7 +84,6 @@ func main() {
 	}
 	testPayload("JSON конфігурація / Токени", jsonData)
 
-	// 2. Вихідний код
 	code := bytes.Repeat([]byte(
 		"package main\nimport \"fmt\"\nfunc main() {\n\tfmt.Println(\"Hello, Aegis\")\n}\n",
 	), 90)
@@ -104,7 +92,6 @@ func main() {
 	}
 	testPayload("Вихідний код C / Go", code)
 
-	// 3. Текстовий документ
 	text := bytes.Repeat([]byte(
 		"Це приклад текстового документа українською мовою з повторюваними фрагментами. ",
 	), 50)
@@ -113,17 +100,14 @@ func main() {
 	}
 	testPayload("Текстовий документ TXT", text)
 
-	// 4. Криптографічні ключі (середня/висока ентропія)
 	keys := make([]byte, 1024)
 	rand.Read(keys)
 	testPayload("Криптографічні ключі RSA/ECC", keys)
 
-	// 5. Повністю випадковий шум
 	noise := make([]byte, 1000)
 	rand.Read(noise)
 	testPayload("Зашумлений бінарний масив", noise)
 
-	// Додатково: користувацький файл
 	if len(os.Args) > 1 {
 		data, err := os.ReadFile(os.Args[1])
 		if err != nil {

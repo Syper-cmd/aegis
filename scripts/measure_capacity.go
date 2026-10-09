@@ -1,11 +1,3 @@
-// measure_capacity.go
-// Допоміжний скрипт для відтворення даних Додатку Г.1
-// (ємність міжсекційних каверн / Slack Space).
-//
-// Використання:
-//
-//	go run scripts/measure_capacity.go <file1.exe> [file2.dll] ...
-//	go run scripts/measure_capacity.go ./samples/
 package main
 
 import (
@@ -47,7 +39,6 @@ func analyzePE(path string) (totalSize int64, sections int, caves []CaveInfo, cT
 		}
 	}
 
-	// Сортуємо каверни за розміром (спадання) — найбільша першою
 	sort.Slice(caves, func(i, j int) bool {
 		return caves[i].CaveSize > caves[j].CaveSize
 	})

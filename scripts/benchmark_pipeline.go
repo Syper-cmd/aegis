@@ -1,17 +1,3 @@
-// benchmark_pipeline.go
-// Допоміжний скрипт для відтворення даних Додатку Д.1
-// (часові затримки етапів конвеєра: парсинг → zlib → Feistel → запис).
-//
-// Скрипт автономний: використовує debug/pe + compress/zlib і спрощену
-// реалізацію 16-раундового Feistel (аналогічну internal/crypto).
-// Реальний запис у файл за замовчуванням вимкнено (dry-run),
-// щоб не псувати тестові бінарники. Увімкнути: -write
-//
-// Використання:
-//
-//	go run scripts/benchmark_pipeline.go <pe_file> [payload_file]
-//	go run scripts/benchmark_pipeline.go notepad.exe secret.txt
-//	go run scripts/benchmark_pipeline.go notepad.exe secret.txt -write
 package main
 
 import (
@@ -28,10 +14,6 @@ import (
 	"path/filepath"
 	"time"
 )
-
-// ---------------------------------------------------------------------------
-// Спрощений 16-раундовий Feistel (сумісний за ідеєю з internal/crypto)
-// ---------------------------------------------------------------------------
 
 const (
 	blockSize  = 8
@@ -92,10 +74,6 @@ func (c *feistelCipher) encrypt(data []byte) []byte {
 	return out
 }
 
-// ---------------------------------------------------------------------------
-// Допоміжні функції
-// ---------------------------------------------------------------------------
-
 func zlibCompress(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := zlib.NewWriterLevel(&buf, zlib.BestCompression)
@@ -139,7 +117,6 @@ func findCaverns(path string) (largest, smaller *cave, err error) {
 		return nil, nil, fmt.Errorf("каверн не знайдено")
 	}
 
-	// найбільша
 	li := 0
 	for i := range caves {
 		if caves[i].size > caves[li].size {
@@ -148,7 +125,6 @@ func findCaverns(path string) (largest, smaller *cave, err error) {
 	}
 	largest = &caves[li]
 
-	// допоміжна (будь-яка інша з CaveSize > 0)
 	for i := range caves {
 		if caves[i].offset != largest.offset {
 			smaller = &caves[i]
@@ -184,7 +160,6 @@ func main() {
 	fmt.Printf("Payload   : %d байт\n", len(payload))
 	fmt.Printf("Режим     : %s\n\n", map[bool]string{false: "dry-run", true: "WRITE"}[*writeFlag])
 
-	// ----- 1. Парсинг -----
 	start := time.Now()
 	largest, smaller, err := findCaverns(pePath)
 	tParse := time.Since(start).Seconds() * 1000
@@ -197,7 +172,6 @@ func main() {
 		fmt.Printf("C_aux     : %d байт (offset 0x%X)\n", smaller.size, smaller.offset)
 	}
 
-	// ----- 2. Стиснення -----
 	start = time.Now()
 	compressed, err := zlibCompress(payload)
 	tZlib := time.Since(start).Seconds() * 1000
@@ -206,9 +180,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ----- 3. Шифрування -----
 	key := make([]byte, keySize256)
-	// фіксований ключ для відтворюваності бенчмарку
 	for i := range key {
 		key[i] = byte(i * 7)
 	}
@@ -218,7 +190,6 @@ func main() {
 	encrypted := cipher.encrypt(compressed)
 	tFeistel := time.Since(start).Seconds() * 1000
 
-	// ----- 4. Запис (опційно) -----
 	var tWrite float64
 	if *writeFlag {
 		start = time.Now()
@@ -234,7 +205,6 @@ func main() {
 		}
 		tWrite = time.Since(start).Seconds() * 1000
 	} else {
-		// імітація вартості двох Seek+Write
 		start = time.Now()
 		_ = len(encrypted)
 		tWrite = time.Since(start).Seconds() * 1000
