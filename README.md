@@ -18,4 +18,4 @@ This program is quite easy to assemble. It uses only two commands:
 - `go build`
 
 ## Tests
-If you need to check the security or quality of PE files, there is a set of scripts in the `metrics/scripts` folder. You can run them using the simple command `go run name_of_script.go`.
+If you need to check the security or quality of PE files, there is a set of scripts in the `scripts` folder. You can run them using the simple command `go run name_of_script.go`.
