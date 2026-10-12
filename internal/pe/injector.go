@@ -258,3 +258,39 @@ func (inj *Injector) ExpandSectionRawSize(secName string, neededSize int) error 
 
 	return file.Sync()
 }
+// Cavern описує знайдену порожнину (slack space) у секції PE файлу.
+type Cavern struct {
+	Name       string
+	CaveSize   uint32
+	CaveOffset uint32
+}
+
+// GetCaverns сканує всі секції PE-файлу та повертає список усіх знайдених каверн.
+func (inj *Injector) GetCaverns() ([]Cavern, error) {
+	if inj.peFile == nil {
+		peFile, err := pe.Open(inj.filePath)
+		if err != nil {
+			return nil, fmt.Errorf("помилка повторного відкриття PE файлу: %w", err)
+		}
+		inj.peFile = peFile
+	}
+
+	debugInfos, err := inj.GetSectionDebugInfo()
+	if err != nil {
+		return nil, fmt.Errorf("помилка отримання інформації про секції: %w", err)
+	}
+
+	var caverns []Cavern
+
+	for _, info := range debugInfos {
+		if info.CaveSize > 0 {
+			caverns = append(caverns, Cavern{
+				Name:       info.Name,
+				CaveSize:   uint32(info.CaveSize),
+				CaveOffset: info.CaveOffset,
+			})
+		}
+	}
+
+	return caverns, nil
+}
