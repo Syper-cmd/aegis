@@ -19,3 +19,4 @@ This program is quite easy to assemble. It uses only two commands:
 
 ## Tests
 If you need to check the security or quality of PE files, there is a set of scripts in the `scripts` folder. You can run them using the simple command `go run name_of_script.go`.
+Additionally, for further testing, there is an `analyze` command that outputs summary data for all sections and more detailed information for the largest one.
